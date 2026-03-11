@@ -16,7 +16,7 @@ Types of Cryptographic Sources
 
 
 
-1. INSTALLATION 
+## 1. INSTALLATION 
 
 Download all codes in a directory
 
@@ -24,10 +24,10 @@ Download all codes in a directory
 <br> $pipreqs . </br>
 $pip install -r requirements.txt
 
-2. RUNNING SCRIPT 1 to 8 WITH
+## 2. RUNNING SCRIPT 1 to 8 WITH
    <br> $sudo python <script> </br>
 
-3. RUNNING SCRIPT 9
+## 3. RUNNING SCRIPT 9
    <br> a. $mkdir result </br>
    <br> b. put domain inside a file, eg : </br>
      <br> $vim target </br>
@@ -36,7 +36,7 @@ $pip install -r requirements.txt
    <br> c.run the script with </br>
      <br> $sudo python 9NetworkProtocol.py --out-dir=result target </br>
 
-4.The code will be updated from time to time 
+## 4.The code will be updated from time to time 
 
 <br> please update and give comment!</br>
 
