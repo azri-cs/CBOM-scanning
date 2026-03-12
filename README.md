@@ -37,8 +37,7 @@ $sudo python <script>
 
 ## 4.The code will be updated from time to time 
 
-Please update and give comment!
-
+We are improving the scanning accuracy (even we have a few version of crypto_scan) that we will published soon. 
 
 ### From 
 #### Muhammad Saufy Rohmad 
