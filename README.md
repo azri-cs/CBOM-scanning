@@ -18,11 +18,12 @@
 ## 1. INSTALLATION 
 
 Download all codes in a directory
-
-1. $pip install pipreqs 
-2. $pipreqs . 
-3. $pip install -r requirements.txt
-
+```bash
+$git clone https://github.com/msaufyrohmad/CBOM-scanning.git
+$pip install pipreqs 
+$pipreqs . 
+$pip install -r requirements.txt
+```
 ## 2. RUNNING SCRIPT 1 to 8 
 $sudo python <script> 
 
