@@ -15,26 +15,40 @@
 
 
 
-## 1. INSTALLATION 
+## 1. DEPENCENCY LIBRAIRES INSTALLATION 
 
 Download all codes in a directory
 ```bash
 $git clone https://github.com/msaufyrohmad/CBOM-scanning.git
+$cd CBOM-scanning
 $pip install pipreqs 
-$pipreqs . 
+$pipreqs .
 $pip install -r requirements.txt
 ```
 ## 2. RUNNING SCRIPT 1 to 8 
+
+```bash
 $sudo python <script> 
+```
 
 ## 3. RUNNING SCRIPT 9
-1. $mkdir result </br>
-2. List domain inside a file, 
-     2.1 $vim target 
-     2.2 uitm.edu.my 
-     2.3 upm.edu.my 
-3. run the script with
-     3.1 $sudo python 9NetworkProtocol.py --out-dir=result target </br>
+
+### 3.1 Create directory to store results
+   ``` bash
+   $mkdir result
+   ```
+   
+### 3.2 Create a file to store all tls server that you want to scan 
+   ```bash
+   $vim target 
+   uitm.edu.my 
+   upm.edu.my
+   ```
+    
+### 3.3 Run the script
+   ``` bash
+   $sudo python 9NetworkProtocol.py --out-dir=result target
+   ```
 
 ## 4.The code will be updated from time to time 
 
