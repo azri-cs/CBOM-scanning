@@ -58,8 +58,8 @@ The (promise) version contains:
 4.2 PTPKM information added as cycloneDX Property
 4.3 Configuration inspection of Software 
 
-### From 
-#### Muhammad Saufy Rohmad 
-##### Malaysia Cryptology Technology and Management Center</br>
-##### saufy@uitm.edu.my
+## 5.Contact 
+Muhammad Saufy Rohmad 
+Malaysia Cryptology Technology and Management Center</br>
+saufy@uitm.edu.my
 
