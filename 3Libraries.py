@@ -133,14 +133,36 @@ CRYPTO_LIB_PATTERNS = [
 # LIBRARY SEARCH PATHS (OS-SPECIFIC)
 # ==========================================================
 
-if OS_TYPE == "unix":
-    LIB_DIRS = [
+def _unix_library_search_dirs():
+    """Debian/Ubuntu multiarch, musl, plus optional dirs from CBOM_EXTRA_LIB_DIRS."""
+    dirs = [
         "/lib",
         "/lib64",
         "/usr/lib",
         "/usr/lib64",
-        "/usr/local/lib"
+        "/usr/local/lib",
+        "/usr/lib/x86_64-linux-gnu",
+        "/usr/lib/aarch64-linux-gnu",
+        "/usr/lib/riscv64-linux-gnu",
+        "/usr/lib/x86_64-linux-gnu/musl",
     ]
+    raw = os.environ.get("CBOM_EXTRA_LIB_DIRS", "").strip()
+    if raw:
+        for part in raw.split(os.pathsep):
+            p = part.strip()
+            if p:
+                dirs.append(p)
+    seen = set()
+    out = []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
+if OS_TYPE == "unix":
+    LIB_DIRS = _unix_library_search_dirs()
     LIB_EXTS = (".so", ".a", ".la")
 else:
     LIB_DIRS = [

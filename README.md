@@ -41,6 +41,12 @@ Elevated privileges (`sudo` on Linux) improve completeness for process, socket, 
 
 Run `python3 scanner_env.py` to print JSON describing the current OS, Python version, whether `/proc` is available (Linux), and which optional CLI tools (`strings`, `nm`, `ldd`, `dumpbin`, `otool`, `sslscan`, `nmap`, `find`) are on `PATH`. Use this before interpreting scan results on an unfamiliar host.
 
+### Optional environment variables
+
+| Variable | Used by |
+|----------|---------|
+| `CBOM_EXTRA_LIB_DIRS` | `3Libraries.py` — additional library root directories to scan (same separator as `PATH` on your OS). Use for vendor trees under `/opt`, Flatpak/Snap exposure, or Nix store paths when a full walk is acceptable. |
+
 ## 2. Scripts, outputs, and notes
 
 Run scripts from the repo root; most write CSV/JSON into the **current working directory** with fixed filenames.
@@ -51,7 +57,7 @@ Run scripts from the repo root; most write CSV/JSON into the **current working d
 | `scanner_platform.py` | Shared helpers (`psutil` executables, `ldd` / `otool` / `dumpbin`) | — | Imported by other scripts |
 | `1BinariesUsed.py` | Running executables + crypto heuristics | `binaries_used.csv` | Uses `strings` / `ldd` on Unix-like systems |
 | `2BinariesDisk.py` | Binaries on disk | `binaries_at_disk.csv` | Same tooling assumptions as (1) |
-| `3Libraries.py` | Shared libraries | `library.csv` | Success message may still say `library_crypto_inventory.csv` |
+| `3Libraries.py` | Shared libraries | `library.csv` | Debian multiarch and musl paths included; extend with `CBOM_EXTRA_LIB_DIRS` |
 | `4Kernel_mod.py` | Kernel modules (`.ko`) | `kernel_modules.csv` | **Linux only**; Windows prints a stub message |
 | `5CertKeys.py` | Cert/key discovery (heavy FS scan) | `crypto_cert_key.csv` | PEM-focused; many `.der`/PKCS#12 files are skipped |
 | `6ExeCodes.py` | Script-like crypto in executables | `exec_script.csv` | |
