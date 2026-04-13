@@ -1,2 +1,6 @@
 /.venv
 /requirements.txt
+
+# Python bytecode (never commit; recreated on import)
+__pycache__/
+*.py[cod]
