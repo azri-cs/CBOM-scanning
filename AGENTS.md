@@ -8,7 +8,7 @@
 ## Script layout
 
 - Root scripts are the product surface: `1BinariesUsed.py` through `9NetworkProtocol.py`, plus `DISCOVERY.py` and `read_cert.py`.
-- There is no shared package layer; crypto detection and cert parsing logic are duplicated across scripts.
+- Thin shared helpers (not a package): `scanner_env.py` (OS/tool snapshot, CSV fingerprints), `scanner_platform.py` (psutil executables, `ldd`/`otool`/`dumpbin` dependency text). Crypto rule tables and cert parsing remain duplicated across scripts.
 
 ## Run-from-root outputs
 
@@ -21,18 +21,20 @@
   - `6ExeCodes.py` → `exec_script.csv`
   - `7Web_App.py` → `web_app.csv`
   - `8NetworkApp.py` → `network_app.csv`
-  - `DISCOVERY.py` → `scan_results.json` and `DISCOVERY_results.csv`
+  - `DISCOVERY.py` → `scan_results.json` and `DISCOVERY_results.csv` (paths overridable via CLI)
+- Most scanner CSVs duplicate **`os_fingerprint`** and **`scanner_limits`** on each row (from `scanner_env.py`).
 
 ## Important execution quirks
 
 - `9NetworkProtocol.py` is the only real CLI-style scanner: `python3 9NetworkProtocol.py targets.txt --out-dir result --workers 6 --timeout 90`
   - It creates `--out-dir` itself; the README `mkdir result` step is unnecessary.
   - It writes one subdirectory per target plus `combined_results.json`.
-- `DISCOVERY.py` is not parameterized from the command line; `__main__` hardcodes `10.220.27.0/24`. Change the source before expecting a different subnet.
+- `DISCOVERY.py` accepts an optional positional network target (default `10.220.27.0/24`), `--nmap-args`, `--json-out`, and `--csv-out`.
 - Most scripts scan the live host by default (`/`, PATH entries, standard web roots, `/lib/modules`, running processes, active sockets). Avoid broad verification runs unless you intend a real machine inventory.
 - Privileges matter: the README expects `sudo`, and process, socket, kernel, and full-filesystem scans may return partial data without elevated access.
 - `4Kernel_mod.py` is Linux-only; Windows support is a placeholder.
-- `7Web_App.py` only scans standard OS web roots (`/var/www`, `/usr/share/nginx`, `/srv/www` on Unix; IIS/XAMPP/WAMP roots on Windows). It does not accept an arbitrary path without code changes.
+- `7Web_App.py` defaults to standard web roots (`/var/www`, `/usr/share/nginx`, `/srv/www` on Unix; IIS/XAMPP/WAMP under `%SystemDrive%` on Windows). Override with env **`CBOM_WEB_ROOTS`** (same separator as `PATH`).
+- **`CBOM_EXTRA_LIB_DIRS`**: extra roots for `3Libraries.py` (e.g. `/opt`, Nix, Flatpak paths when you accept scan cost).
 - `5CertKeys.py` is the expensive recursive filesystem scan. `read_cert.py` is the narrow verifier: `python3 read_cert.py <file>` prints JSON for one file.
 - `5CertKeys.py` and `read_cert.py` only parse PEM certificate/private-key bodies even though `.der`, `.p12`, and `.pfx` are listed as candidate extensions; those formats are usually skipped.
 
