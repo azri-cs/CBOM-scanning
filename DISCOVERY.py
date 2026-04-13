@@ -1,6 +1,7 @@
-import nmap
-import json
+import argparse
 import csv
+import json
+import nmap
 
 # Custom mapping
 APP_LOOKUP = {
@@ -20,13 +21,13 @@ APP_LOOKUP = {
 def get_app_category(port):
     return APP_LOOKUP.get(port, "Unknown / Other")
 
-def scan_network(network_range):
+def scan_network(network_range, nmap_args="-sS -sV -O -T4", json_out="scan_results.json", csv_out="DISCOVERY_results.csv"):
     nm = nmap.PortScanner()
     print(f"Scanning {network_range}... (Requires sudo for MAC/OS detection)")
-    
-    # -sS (SYN scan), -sV (Version), -O (OS), -T4 (Speed)
-    nm.scan(hosts=network_range, arguments='-sS -sV -O -T4')
-    
+    print(f"[i] nmap arguments: {nmap_args}")
+
+    nm.scan(hosts=network_range, arguments=nmap_args)
+
     scan_results = {}
     csv_data = []
 
@@ -53,11 +54,11 @@ def scan_network(network_range):
         for proto in nm[host].all_protocols():
             ports = nm[host][proto].keys()
             host_info["protocols"][proto] = []
-            
+
             for port in ports:
                 details = nm[host][proto][port]
                 app_type = get_app_category(port)
-                
+
                 # Update JSON structure
                 host_info["protocols"][proto].append({
                     "port": port,
@@ -80,22 +81,57 @@ def scan_network(network_range):
                     "Product": details['product'],
                     "Version": details['version']
                 })
-        
+
         scan_results[host] = host_info
 
     # Save JSON
-    with open("scan_results.json", "w") as f:
+    with open(json_out, "w") as f:
         json.dump(scan_results, f, indent=4)
 
     # Save CSV with new columns
     csv_columns = ["IP", "MAC Address", "Vendor", "OS", "Port", "Protocol", "Service", "Application Type", "Product", "Version"]
-    with open("DISCOVERY_results.csv", "w", newline='') as f:
+    with open(csv_out, "w", newline='') as f:
         writer = csv.DictWriter(f, fieldnames=csv_columns)
         writer.writeheader()
         writer.writerows(csv_data)
-    
+
     print(f"Scan complete. Data for {len(nm.all_hosts())} hosts saved.")
+    print(f"[+] JSON: {json_out}")
+    print(f"[+] CSV: {csv_out}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="LAN port and OS fingerprinting via nmap (python-nmap)."
+    )
+    parser.add_argument(
+        "network",
+        nargs="?",
+        default="10.220.27.0/24",
+        help="Target network (CIDR), host, or nmap target specification (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--nmap-args",
+        default="-sS -sV -O -T4",
+        help="Arguments passed to nmap, e.g. use '-sT -sV -T4' if raw SYN scans are blocked (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--json-out",
+        default="scan_results.json",
+        help="Output JSON path (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--csv-out",
+        default="DISCOVERY_results.csv",
+        help="Output CSV path (default: %(default)s)",
+    )
+    args = parser.parse_args()
+    scan_network(
+        args.network,
+        nmap_args=args.nmap_args,
+        json_out=args.json_out,
+        csv_out=args.csv_out,
+    )
 
 if __name__ == "__main__":
-    # Remember to run this with sudo!
-    scan_network("10.220.27.0/24")
+    main()

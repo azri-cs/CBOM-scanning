@@ -65,7 +65,7 @@ Run scripts from the repo root; most write CSV/JSON into the **current working d
 | `7Web_App.py` | Web roots | `web_app.csv` | Defaults for common layouts; override with `CBOM_WEB_ROOTS` |
 | `8NetworkApp.py` | TLS/listening processes | `network_app.csv` | |
 | `9NetworkProtocol.py` | Remote TLS via `sslscan` | Directory per target + `combined_results.json` under `--out-dir` | See section 3 |
-| `DISCOVERY.py` | LAN port/OS scan | `scan_results.json`, `DISCOVERY_results.csv` | Subnet is **hardcoded** in the file; change before use |
+| `DISCOVERY.py` | LAN port/OS scan | `scan_results.json`, `DISCOVERY_results.csv` | CLI: optional `network` arg, `--nmap-args`, `--json-out`, `--csv-out` |
 | `read_cert.py` | Single-file PEM check | stdout (JSON) | `python3 read_cert.py <file>` |
 
 ## 3. Script 9 (TLS targets file)
@@ -77,6 +77,14 @@ python3 9NetworkProtocol.py targets.txt --out-dir result --workers 6 --timeout 9
 ```
 
 `targets.txt` should list one `host` or `host:port` per line. `sslscan` must be on `PATH`.
+
+### DISCOVERY (nmap)
+
+```bash
+python3 DISCOVERY.py 192.168.1.0/24 --nmap-args "-sT -sV -T4"
+```
+
+The first positional argument is the nmap target (default `10.220.27.0/24` if omitted). Use `--nmap-args` for a lighter TCP connect scan when raw SYN (`-sS`) is not available.
 
 ## 4. Roadmap (upstream)
 
