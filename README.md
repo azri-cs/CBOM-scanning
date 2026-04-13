@@ -46,6 +46,7 @@ Run `python3 scanner_env.py` to print JSON describing the current OS, Python ver
 | Variable | Used by |
 |----------|---------|
 | `CBOM_EXTRA_LIB_DIRS` | `3Libraries.py` — additional library root directories to scan (same separator as `PATH` on your OS). Use for vendor trees under `/opt`, Flatpak/Snap exposure, or Nix store paths when a full walk is acceptable. |
+| `CBOM_WEB_ROOTS` | `7Web_App.py` — override default web document roots (same separator as `PATH`). |
 
 ## 2. Scripts, outputs, and notes
 
@@ -61,7 +62,7 @@ Run scripts from the repo root; most write CSV/JSON into the **current working d
 | `4Kernel_mod.py` | Kernel modules (`.ko`) | `kernel_modules.csv` | **Linux only**; Windows prints a stub message |
 | `5CertKeys.py` | Cert/key discovery (heavy FS scan) | `crypto_cert_key.csv` | PEM-focused; many `.der`/PKCS#12 files are skipped |
 | `6ExeCodes.py` | Script-like crypto in executables | `exec_script.csv` | |
-| `7Web_App.py` | Web roots | `web_app.csv` | Fixed OS web roots only (not arbitrary paths without edits) |
+| `7Web_App.py` | Web roots | `web_app.csv` | Defaults for common layouts; override with `CBOM_WEB_ROOTS` |
 | `8NetworkApp.py` | TLS/listening processes | `network_app.csv` | |
 | `9NetworkProtocol.py` | Remote TLS via `sslscan` | Directory per target + `combined_results.json` under `--out-dir` | See section 3 |
 | `DISCOVERY.py` | LAN port/OS scan | `scan_results.json`, `DISCOVERY_results.csv` | Subnet is **hardcoded** in the file; change before use |

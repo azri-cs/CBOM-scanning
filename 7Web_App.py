@@ -93,12 +93,18 @@ def detect_os():
     return platform.system().lower()
 
 def default_web_roots():
+    raw = os.environ.get("CBOM_WEB_ROOTS", "").strip()
+    if raw:
+        return [p.strip() for p in raw.split(os.pathsep) if p.strip()]
+
     os_type = detect_os()
     if os_type == "windows":
+        drive = os.environ.get("SystemDrive", "C:")
+        base = drive + "\\"
         return [
-            "C:\\inetpub\\wwwroot",
-            "C:\\xampp\\htdocs",
-            "C:\\wamp64\\www",
+            os.path.join(base, "inetpub", "wwwroot"),
+            os.path.join(base, "xampp", "htdocs"),
+            os.path.join(base, "wamp64", "www"),
         ]
     return [
         "/var/www",

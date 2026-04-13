@@ -161,14 +161,39 @@ def _unix_library_search_dirs():
     return out
 
 
+def _windows_library_search_dirs():
+    """System DLL locations plus common application prefixes; extend via CBOM_EXTRA_LIB_DIRS."""
+    sysroot = os.environ.get("SystemRoot", "C:\\Windows")
+    dirs = [
+        sysroot + "\\System32",
+        sysroot + "\\SysWOW64",
+    ]
+    for env_name in ("ProgramFiles", "ProgramFiles(x86)"):
+        base = os.environ.get(env_name)
+        if not base:
+            continue
+        dirs.append(os.path.join(base, "Microsoft.NET"))
+        dirs.append(os.path.join(base, "OpenSSL-Win64", "bin"))
+    raw = os.environ.get("CBOM_EXTRA_LIB_DIRS", "").strip()
+    if raw:
+        for part in raw.split(os.pathsep):
+            p = part.strip()
+            if p:
+                dirs.append(p)
+    seen = set()
+    out = []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
 if OS_TYPE == "unix":
     LIB_DIRS = _unix_library_search_dirs()
     LIB_EXTS = (".so", ".a", ".la")
 else:
-    LIB_DIRS = [
-        os.environ.get("SystemRoot", "C:\\Windows") + "\\System32",
-        os.environ.get("SystemRoot", "C:\\Windows") + "\\SysWOW64"
-    ]
+    LIB_DIRS = _windows_library_search_dirs()
     LIB_EXTS = (".dll", ".lib")
 
 # ==========================================================
