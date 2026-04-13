@@ -7,6 +7,13 @@ import csv
 import re
 import psutil
 
+from scanner_platform import (
+    iter_running_executable_paths,
+    nm_symbols_text,
+    shared_object_dependency_text,
+    strings_text,
+)
+
 
 CRYPTO_RULES = {
     # === Symmetric Block Ciphers ===
@@ -221,39 +228,9 @@ def is_executable(path):
     return os.path.isfile(path) and os.access(path, os.X_OK)
 
 def list_running_binaries():
-    binaries = set()
-
-    if OS_TYPE == "unix":
-        proc_dir = "/proc"
-        for pid in os.listdir(proc_dir):
-            if not pid.isdigit():
-                continue
-            exe_path = os.path.join(proc_dir, pid, "exe")
-            try:
-                real_exe = os.readlink(exe_path)
-                if os.path.isfile(real_exe) and os.access(real_exe, os.X_OK):
-                    binaries.add(real_exe)
-            except Exception:
-                continue
-
-    else:  # Windows
-        # Get PIDs
-        tasklist = run_cmd("tasklist /FO CSV /NH")
-        for line in tasklist.splitlines():
-            if not line.strip():
-                continue
-            exe_name = line.split('","')[0].strip('"')
-
-            # Resolve full path
-            wmic = run_cmd(f'wmic process where name="{exe_name}" get ExecutablePath /value')
-            for l in wmic.splitlines():
-                if l.lower().startswith("executablepath="):
-                    path = l.split("=", 1)[1].strip()
-                    if os.path.isfile(path):
-                        binaries.add(path)
-
-    print(len(binaries)," detected")
-    return sorted(binaries)
+    binaries = sorted(iter_running_executable_paths())
+    print(len(binaries), " detected")
+    return binaries
 # ==========================================================
 # DEPENDENCY SCANNING
 # ==========================================================
@@ -261,10 +238,7 @@ def list_running_binaries():
 def get_crypto_deps(binary):
     deps = list()
 
-    if OS_TYPE == "unix":
-        out = run_cmd(["ldd", binary])
-    else:
-        out = run_cmd(f'dumpbin /imports "{binary}"')
+    out = shared_object_dependency_text(binary)
 
     for line in out.splitlines():
         for lib in CRYPTO_LIB_PATTERNS:
@@ -280,14 +254,9 @@ def get_crypto_deps(binary):
 def detect_crypto(binary):
     results = []
 
-    if OS_TYPE == "unix":
-        strings_out = run_cmd(["strings", binary]).lower()
-        symbols_out = run_cmd(["nm", "-D", binary]).lower()
-        deps_out = run_cmd(["ldd", binary]).lower()
-    else:
-        strings_out = run_cmd(f'strings "{binary}"').lower()
-        symbols_out = run_cmd(f'dumpbin /symbols "{binary}"').lower()
-        deps_out = run_cmd(f'dumpbin /imports "{binary}"').lower()
+    strings_out = strings_text(binary).lower()
+    symbols_out = nm_symbols_text(binary).lower()
+    deps_out = shared_object_dependency_text(binary).lower()
 
     for name, meta in CRYPTO_RULES.items():
         algo = meta.get("algorithmProperties", {})

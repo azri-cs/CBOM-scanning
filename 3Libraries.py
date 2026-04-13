@@ -6,6 +6,8 @@ import subprocess
 import csv
 import re
 
+from scanner_platform import shared_object_dependency_text
+
 # ==========================================================
 # OS DETECTION
 # ==========================================================
@@ -188,11 +190,15 @@ def get_crypto_deps(lib):
     libs = set()
 
     if OS_TYPE == "unix":
-        if not lib.endswith(".so") and ".so." not in lib:
+        pl = lib.lower()
+        is_shared = (
+            pl.endswith(".so") or ".so." in pl
+            or pl.endswith(".dylib") or ".dylib." in pl
+        )
+        if not is_shared:
             return "not-applicable"
-        out = run_cmd(["ldd", lib])
-    else:
-        out = run_cmd(f'dumpbin /imports "{lib}"')
+
+    out = shared_object_dependency_text(lib)
 
     for line in out.splitlines():
         for pat in CRYPTO_LIB_PATTERNS:

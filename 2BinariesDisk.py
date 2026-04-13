@@ -7,6 +7,12 @@ import csv
 import re
 import psutil
 
+from scanner_platform import (
+    nm_symbols_text,
+    shared_object_dependency_text,
+    strings_text,
+)
+
 # ==========================================================
 # OS DETECTION
 # ==========================================================
@@ -245,10 +251,7 @@ def check_binary_state(file_path):
 def get_crypto_deps(binary):
     deps = set()
 
-    if OS_TYPE == "unix":
-        out = run_cmd(["ldd", binary])
-    else:
-        out = run_cmd(f'dumpbin /imports "{binary}"')
+    out = shared_object_dependency_text(binary)
 
     for line in out.splitlines():
         for lib in CRYPTO_LIB_PATTERNS:
@@ -264,14 +267,9 @@ def get_crypto_deps(binary):
 def detect_crypto(binary):
     results = []
 
-    if OS_TYPE == "unix":
-        strings_out = run_cmd(["strings", binary]).lower()
-        symbols_out = run_cmd(["nm", "-D", binary]).lower()
-        deps_out = run_cmd(["ldd", binary]).lower()
-    else:
-        strings_out = run_cmd(f'strings "{binary}"').lower()
-        symbols_out = run_cmd(f'dumpbin /symbols "{binary}"').lower()
-        deps_out = run_cmd(f'dumpbin /imports "{binary}"').lower()
+    strings_out = strings_text(binary).lower()
+    symbols_out = nm_symbols_text(binary).lower()
+    deps_out = shared_object_dependency_text(binary).lower()
 
     for name, meta in CRYPTO_RULES.items():
         algo = meta.get("algorithmProperties", {})

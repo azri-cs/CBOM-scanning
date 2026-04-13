@@ -48,6 +48,7 @@ Run scripts from the repo root; most write CSV/JSON into the **current working d
 | Script | Role | Default output | Notes |
 |--------|------|----------------|-------|
 | `scanner_env.py` | Print OS and tool availability (JSON to stdout) | — | Not a scanner; use for troubleshooting |
+| `scanner_platform.py` | Shared helpers (`psutil` executables, `ldd` / `otool` / `dumpbin`) | — | Imported by other scripts |
 | `1BinariesUsed.py` | Running executables + crypto heuristics | `binaries_used.csv` | Uses `strings` / `ldd` on Unix-like systems |
 | `2BinariesDisk.py` | Binaries on disk | `binaries_at_disk.csv` | Same tooling assumptions as (1) |
 | `3Libraries.py` | Shared libraries | `library.csv` | Success message may still say `library_crypto_inventory.csv` |
