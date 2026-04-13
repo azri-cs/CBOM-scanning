@@ -5,7 +5,7 @@ import platform
 import subprocess
 import csv
 import re
-import psutil
+from deps import psutil
 
 from scanner_env import get_os_fingerprint, get_scanner_limits
 from scanner_platform import (

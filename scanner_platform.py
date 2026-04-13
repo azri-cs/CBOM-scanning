@@ -13,7 +13,7 @@ import subprocess
 from collections.abc import Iterator
 from typing import List, Tuple
 
-import psutil
+from deps import psutil
 
 
 def is_windows() -> bool:

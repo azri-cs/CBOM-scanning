@@ -4,11 +4,12 @@
 - This repo is a flat set of standalone Python scanners, not a package or service. There is no test suite, CI, lint, or typecheck config; do not invent repo commands beyond running the scripts directly.
 - `requirements.txt` is the only manifest and only declares `cryptography`, `psutil`, and `xmltodict`. Some scripts also need undeclared runtime dependencies: system `strings`, `nm`, `ldd`, `sslscan`, `nmap`, plus the Python `nmap` binding for `DISCOVERY.py`.
 - Basic setup: `python3 -m pip install -r requirements.txt`. For `DISCOVERY.py`, also install system `nmap` and the Python `nmap` binding. For `9NetworkProtocol.py`, install `sslscan`.
+- **`sudo python3` vs dependencies:** `sudo` runs the system interpreter, which often lacks `psutil` (and ignores a user `pip install --user`). Prefer `sudo /path/to/repo/.venv/bin/python3 <script>.py` when the repo ships `.venv`, or install requirements for root: `sudo python3 -m pip install -r requirements.txt` (on PEP 668–managed distros you may need `apt install python3-psutil` or pip’s `--break-system-packages`).
 
 ## Script layout
 
 - Root scripts are the product surface: `1BinariesUsed.py` through `9NetworkProtocol.py`, plus `DISCOVERY.py` and `read_cert.py`.
-- Thin shared helpers (not a package): `scanner_env.py` (OS/tool snapshot, CSV fingerprints), `scanner_platform.py` (psutil executables, `ldd`/`otool`/`dumpbin` dependency text). Crypto rule tables and cert parsing remain duplicated across scripts.
+- Thin shared helpers (not a package): `deps.py` (import-time check for `psutil` with sudo/venv hints), `scanner_env.py` (OS/tool snapshot, CSV fingerprints), `scanner_platform.py` (psutil executables, `ldd`/`otool`/`dumpbin` dependency text). `run_pipreqs.py` wraps `pipreqs` with repo-friendly defaults (see README). Crypto rule tables and cert parsing remain duplicated across scripts.
 
 ## Run-from-root outputs
 

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-import psutil
+import csv
+import os
+import platform
 import socket
 import ssl
-import os
-import csv
-import platform
 from datetime import datetime
+
+from deps import psutil
 
 from scanner_env import get_os_fingerprint, get_scanner_limits
 

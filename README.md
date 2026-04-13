@@ -21,11 +21,13 @@ Use Python 3.8+ recommended. This repo does not ship a committed `requirements.t
 git clone https://github.com/azri-cs/CBOM-scanning.git
 cd CBOM-scanning
 python3 -m pip install pipreqs
-pipreqs . --encoding=utf-8
+python3 run_pipreqs.py
 python3 -m pip install -r requirements.txt
 ```
 
-`pipreqs` writes `requirements.txt` in the project root. Typical packages include `cryptography`, `psutil`, and `xmltodict`. If `DISCOVERY.py` fails on `import nmap`, install the binding explicitly (PyPI package name **`python-nmap`**, import name `nmap`). Re-run `pipreqs` after changing imports if you want the file to stay in sync.
+`run_pipreqs.py` runs `pipreqs` with UTF-8 encoding and `--ignore .venv` (pipreqs skips `venv` but not `.venv`; scanning `site-packages` can hit non–UTF-8 sources and fail). It also sets logging to **ERROR** so you do not see noisy `WARNING` lines: pipreqs often cannot match imports to installed wheels from local metadata (for example `cryptography` without `top_level.txt` in `.dist-info`) and falls back to PyPI, and the import `nmap` does not match any PyPI project named `nmap` (use **`python-nmap`**). Pass **`--verbose`** if you want those INFO/WARNING messages. You can still invoke `pipreqs` yourself with the same flags if you prefer.
+
+Typical packages include `cryptography`, `psutil`, and `xmltodict`. If `DISCOVERY.py` fails on `import nmap`, install the binding explicitly (PyPI package name **`python-nmap`**, import name `nmap`). Re-run `run_pipreqs.py` after changing imports if you want the file to stay in sync.
 
 **Minimal Python install (if you prefer not to run `pipreqs` first):**
 
@@ -128,7 +130,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -U pip
 python3 -m pip install pipreqs
-pipreqs . --encoding=utf-8
+python3 run_pipreqs.py
 python3 -m pip install -r requirements.txt
 ```
 
