@@ -7,6 +7,8 @@ import platform
 import sys
 from pathlib import Path
 
+from scanner_env import get_os_fingerprint, get_scanner_limits
+
 OUTPUT_CSV = "kernel_modules.csv"
 
 # --- Crypto detection patterns ---
@@ -102,6 +104,8 @@ def detect_crypto(strings_data):
     }
 
 def run_linux_scan():
+    fp = get_os_fingerprint()
+    limits = get_scanner_limits()
     modules = get_kernel_modules_linux()
     print(modules)
 
@@ -117,7 +121,9 @@ def run_linux_scan():
             "crypto_algorithms",
             "crypto_primitives",
             "key_sizes",
-            "crypto_functions"
+            "crypto_functions",
+            "os_fingerprint",
+            "scanner_limits",
         ])
 
         for mod in modules:
@@ -131,7 +137,9 @@ def run_linux_scan():
                     crypto["algorithms"],
                     crypto["primitives"],
                     crypto["key_sizes"],
-                    crypto["functions"]
+                    crypto["functions"],
+                    fp,
+                    limits,
                 ])
 
     print(f"[+] Linux kernel crypto scan complete")

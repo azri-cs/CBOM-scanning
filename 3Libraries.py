@@ -6,6 +6,7 @@ import subprocess
 import csv
 import re
 
+from scanner_env import get_os_fingerprint, get_scanner_limits
 from scanner_platform import shared_object_dependency_text
 
 # ==========================================================
@@ -281,6 +282,8 @@ def detect_crypto(lib):
 # ==========================================================
 
 def main():
+    fp = get_os_fingerprint()
+    limits = get_scanner_limits()
     with open("library.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -291,7 +294,9 @@ def main():
             "algorithm",
             "primitive",
             "key_size",
-            "detection_method"
+            "detection_method",
+            "os_fingerprint",
+            "scanner_limits",
         ])
 
         for lib in find_libraries():
@@ -317,7 +322,9 @@ def main():
                     "unknown",
                     "unknown",
                     "unknown",
-                    "dependency-only" if crypto_deps != "none" else "static-string"
+                    "dependency-only" if crypto_deps != "none" else "static-string",
+                    fp,
+                    limits,
                 ])
             else:
                 for alg, primitive, key_size in crypto_hits:
@@ -329,7 +336,9 @@ def main():
                         alg,
                         primitive,
                         key_size,
-                        "dependency + strings"
+                        "dependency + strings",
+                        fp,
+                        limits,
                     ])
 
     print("[+] CSV generated: library_crypto_inventory.csv")

@@ -6,6 +6,8 @@ import csv
 import platform
 from pathlib import Path
 
+from scanner_env import get_os_fingerprint, get_scanner_limits
+
 OUTPUT_CSV = "web_app.csv"
 
 # =====================================================
@@ -150,6 +152,8 @@ def scan_file(path):
 def main(roots=None):
     roots = roots or default_web_roots()
     os_type = detect_os()
+    fp = get_os_fingerprint()
+    limits = get_scanner_limits()
 
     print(f"[i] Detected OS: {os_type}")
     print("[i] Web roots:")
@@ -165,7 +169,9 @@ def main(roots=None):
             "primitive",
             "library_or_api",
             "key_size",
-            "detection_pattern"
+            "detection_pattern",
+            "os_fingerprint",
+            "scanner_limits",
         ])
 
         for root in roots:
@@ -195,6 +201,8 @@ def main(roots=None):
                             f["library"],
                             f["key_size"],
                             f["library"],
+                            fp,
+                            limits,
                         ])
 
     print(f"[+] Web crypto scan complete → {OUTPUT_CSV}")

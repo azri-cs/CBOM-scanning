@@ -7,6 +7,7 @@ import csv
 import re
 import psutil
 
+from scanner_env import get_os_fingerprint, get_scanner_limits
 from scanner_platform import (
     binary_kind,
     classify_linked_libraries,
@@ -400,6 +401,8 @@ def guess_language(binary_path):
 # MAIN NEW
 # =========================================================
 def main():
+    fp = get_os_fingerprint()
+    limits = get_scanner_limits()
     with open("binaries_at_disk.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -412,7 +415,9 @@ def main():
             "algorithm",
             "crypto_library",
             "key_length",
-            "parameters"
+            "parameters",
+            "os_fingerprint",
+            "scanner_limits",
         ])
 
         for binary in list_binaries():
@@ -435,7 +440,9 @@ def main():
                     "unknown",
                     libs,
                     "unknown",
-                    "none"
+                    "none",
+                    fp,
+                    limits,
                 ])
                 continue
 
@@ -454,7 +461,9 @@ def main():
                     hit["algorithm"],
                     libs,
                     key_len,
-                    param_str
+                    param_str,
+                    fp,
+                    limits,
                 ])
 
 def display():

@@ -8,6 +8,8 @@ import csv
 import platform
 from datetime import datetime
 
+from scanner_env import get_os_fingerprint, get_scanner_limits
+
 OUTPUT_CSV = "network_app.csv"
 
 INTERPRETERS = ("python", "php", "node", "perl", "ruby", "bash", "sh")
@@ -95,6 +97,8 @@ def main():
     rows = []
     seen = set()
     timestamp = datetime.utcnow().isoformat()
+    fp = get_os_fingerprint()
+    limits = get_scanner_limits()
 
     # ================= TLS & SSH CLIENT/SERVER =================
     for conn in psutil.net_connections(kind="inet"):
@@ -130,6 +134,8 @@ def main():
                 conn.raddr.ip if conn.raddr else "",
                 conn.raddr.port if conn.raddr else conn.laddr.port,
                 crypto,
+                fp,
+                limits,
             ])
         except Exception:
             continue
@@ -150,6 +156,8 @@ def main():
             "",
             "",
             "IKE / ESP (kernel-managed)",
+            fp,
+            limits,
         ])
 
     # ================= WRITE CSV =================
@@ -166,6 +174,8 @@ def main():
             "RemoteIP",
             "RemotePort",
             "CryptoDetails",
+            "os_fingerprint",
+            "scanner_limits",
         ])
         writer.writerows(rows)
 

@@ -5,6 +5,8 @@ import csv
 import hashlib
 import platform
 from datetime import timezone
+
+from scanner_env import get_os_fingerprint, get_scanner_limits
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.backends import default_backend
@@ -156,6 +158,8 @@ def analyze_file(path):
 def main(scan_root=None):
     scan_root = scan_root or default_scan_root()
     os_type = detect_os()
+    fp = get_os_fingerprint()
+    limits = get_scanner_limits()
 
     print(f"[i] Detected OS: {os_type}")
     print(f"[i] Scanning root: {scan_root}")
@@ -179,6 +183,8 @@ def main(scan_root=None):
             "not_after",
             "fingerprint_sha1",
             "fingerprint_sha256",
+            "os_fingerprint",
+            "scanner_limits",
         ])
 
         for dirpath, _, filenames in os.walk(scan_root):
@@ -208,6 +214,8 @@ def main(scan_root=None):
                         result["not_after"],
                         result["fingerprint_sha1"],
                         result["fingerprint_sha256"],
+                        fp,
+                        limits,
                     ])
 
     print(f"[+] Scan complete → {OUTPUT_CSV}")

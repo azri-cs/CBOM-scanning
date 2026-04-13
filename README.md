@@ -52,6 +52,8 @@ Run `python3 scanner_env.py` to print JSON describing the current OS, Python ver
 
 Run scripts from the repo root; most write CSV/JSON into the **current working directory** with fixed filenames.
 
+Scanner CSVs include **`os_fingerprint`** (concise OS/kernel/machine summary) and **`scanner_limits`** (which optional CLI tools were on `PATH` when the scan ran) on each row so results from different servers can be compared downstream.
+
 | Script | Role | Default output | Notes |
 |--------|------|----------------|-------|
 | `scanner_env.py` | Print OS and tool availability (JSON to stdout) | — | Not a scanner; use for troubleshooting |

@@ -6,6 +6,8 @@ import csv
 import platform
 from pathlib import Path
 
+from scanner_env import get_os_fingerprint, get_scanner_limits
+
 OUTPUT_CSV = "exec_script.csv"
 
 SCRIPT_EXT = (".py", ".sh", ".pl", ".rb", ".ps1", ".bat", ".cmd")
@@ -120,6 +122,8 @@ def scan_file(path):
 def main(scan_root=None):
     scan_root = scan_root or default_scan_root()
     os_type = detect_os()
+    fp = get_os_fingerprint()
+    limits = get_scanner_limits()
 
     print(f"[i] Detected OS: {os_type}")
     print(f"[i] Scanning root: {scan_root}")
@@ -132,7 +136,9 @@ def main(scan_root=None):
             "algorithm",
             "primitive",
             "function_pattern",
-            "key_size"
+            "key_size",
+            "os_fingerprint",
+            "scanner_limits",
         ])
 
         for dirpath, _, filenames in os.walk(scan_root):
@@ -156,7 +162,9 @@ def main(scan_root=None):
                         f["algorithm"],
                         f["primitive"],
                         f["function"],
-                        f["key_size"]
+                        f["key_size"],
+                        fp,
+                        limits,
                     ])
 
     print(f"[+] Scan complete → {OUTPUT_CSV}")
