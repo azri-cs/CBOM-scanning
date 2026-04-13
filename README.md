@@ -37,12 +37,17 @@ python3 -m pip install -r requirements.txt
 
 Elevated privileges (`sudo` on Linux) improve completeness for process, socket, kernel, and deep filesystem scans. Network scripts may require root for raw scans or full OS detection.
 
+### Environment self-check
+
+Run `python3 scanner_env.py` to print JSON describing the current OS, Python version, whether `/proc` is available (Linux), and which optional CLI tools (`strings`, `nm`, `ldd`, `dumpbin`, `otool`, `sslscan`, `nmap`, `find`) are on `PATH`. Use this before interpreting scan results on an unfamiliar host.
+
 ## 2. Scripts, outputs, and notes
 
 Run scripts from the repo root; most write CSV/JSON into the **current working directory** with fixed filenames.
 
 | Script | Role | Default output | Notes |
 |--------|------|----------------|-------|
+| `scanner_env.py` | Print OS and tool availability (JSON to stdout) | — | Not a scanner; use for troubleshooting |
 | `1BinariesUsed.py` | Running executables + crypto heuristics | `binaries_used.csv` | Uses `strings` / `ldd` on Unix-like systems |
 | `2BinariesDisk.py` | Binaries on disk | `binaries_at_disk.csv` | Same tooling assumptions as (1) |
 | `3Libraries.py` | Shared libraries | `library.csv` | Success message may still say `library_crypto_inventory.csv` |
