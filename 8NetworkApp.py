@@ -78,6 +78,10 @@ def detect_ipsec_services():
             if name in ("charon", "pluto", "strongswan"):
                 ipsec_entries.append(proc)
 
+        elif OS_TYPE in ("freebsd", "openbsd", "netbsd", "dragonfly"):
+            if name in ("charon", "pluto", "strongswan", "racoon", "iked"):
+                ipsec_entries.append(proc)
+
         elif OS_TYPE == "windows":
             if name in ("ikeext", "policyagent"):
                 ipsec_entries.append(proc)

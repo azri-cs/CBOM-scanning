@@ -8,6 +8,8 @@ import re
 import psutil
 
 from scanner_platform import (
+    binary_kind,
+    classify_linked_libraries,
     nm_symbols_text,
     shared_object_dependency_text,
     strings_text,
@@ -350,51 +352,23 @@ def classify_libraries(binary_path):
         print(f"Error: File '{binary_path}' not found.")
         return [], []
 
-    # --- STEP 1: VALIDATE IF C/C++ BINARY (ELF CHECK) ---
-    # We check the first 4 bytes for the ELF magic number: \x7fELF
-    try:
-        with open(binary_path, 'rb') as f:
-            magic = f.read(4)
-            if magic != b'\x7fELF':
-                print(f"Skipping: {binary_path} is not a compiled C/C++ ELF binary (likely a script or data).")
-                return [], []
-    except Exception as e:
-        print(f"Error reading file: {e}")
+    kind = binary_kind(binary_path)
+    if kind == "unknown":
+        print(
+            f"Skipping: {binary_path} is not a recognized native binary "
+            "(script, data, or unsupported format)."
+        )
+        return [], []
+    if kind == "pe":
         return [], []
 
-    # --- STEP 2: RUN LDD ANALYSIS ---
-    try:
-        result = subprocess.check_output(['ldd', binary_path], stderr=subprocess.STDOUT).decode()
-    except subprocess.CalledProcessError:
-        # This often happens if the binary is for a different architecture (e.g., ARM binary on x86)
-        print(f"Error: ldd failed on {binary_path}. Architecture mismatch or corrupted binary.")
-        return [], []
-
-    system_libs = []
-    third_party_libs = []
-    system_paths = ['/lib', '/usr/lib', '/lib64']
-
-    for line in result.splitlines():
-        if "=>" in line:
-            parts = line.split("=>")
-            lib_name = parts[0].strip()
-            lib_path = parts[1].split('(')[0].strip()
-
-            if not lib_path or lib_path == "not found":
-                continue
-
-            is_system = any(lib_path.startswith(p) for p in system_paths)
-            
-            # Refine third-party check
-            if lib_path.startswith('/usr/local/lib'):
-                is_system = False
-
-            if is_system:
-                system_libs.append(lib_path)
-            else:
-                third_party_libs.append(lib_path)
-
-    return third_party_libs, system_libs
+    third_party, system = classify_linked_libraries(binary_path)
+    if not third_party and not system:
+        print(
+            f"Note: no shared-library lines parsed for {binary_path} "
+            f"({kind}); static binary, wrong architecture, or missing tools."
+        )
+    return third_party, system
 
 # ===================================================================
 # GUESS PRORGRAMMING LANGUAGE

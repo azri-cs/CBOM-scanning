@@ -11,6 +11,7 @@ import platform
 import shutil
 import subprocess
 from collections.abc import Iterator
+from typing import List, Tuple
 
 import psutil
 
@@ -101,3 +102,86 @@ def nm_symbols_text(binary_path: str) -> str:
         return out if out else _run_capture([nm, binary_path])
 
     return _run_capture([nm, "-D", binary_path])
+
+
+def binary_kind(path: str) -> str:
+    """Rough native format: elf, macho, pe, unknown."""
+    try:
+        with open(path, "rb") as f:
+            magic = f.read(4)
+    except OSError:
+        return "unknown"
+    if magic == b"\x7fELF":
+        return "elf"
+    if magic in (
+        b"\xfe\xed\xfa\xcf",
+        b"\xcf\xfa\xed\xfe",
+        b"\xce\xfa\xed\xfe",
+        b"\xfe\xed\xfa\xce",
+    ):
+        return "macho"
+    if len(magic) >= 2 and magic[:2] == b"MZ":
+        return "pe"
+    return "unknown"
+
+
+def _parse_ldd_lines(text: str) -> Tuple[List[str], List[str]]:
+    system_libs: List[str] = []
+    third_party_libs: List[str] = []
+    system_paths = ("/lib", "/usr/lib", "/lib64", "/usr/lib64")
+
+    for line in text.splitlines():
+        if "=>" not in line:
+            continue
+        parts = line.split("=>")
+        lib_path = parts[1].split("(")[0].strip()
+        if not lib_path or lib_path == "not found":
+            continue
+        is_system = any(lib_path.startswith(p) for p in system_paths)
+        if lib_path.startswith("/usr/local/lib"):
+            is_system = False
+        if is_system:
+            system_libs.append(lib_path)
+        else:
+            third_party_libs.append(lib_path)
+
+    return third_party_libs, system_libs
+
+
+def _parse_otool_l_lines(text: str) -> Tuple[List[str], List[str]]:
+    system_libs: List[str] = []
+    third_party_libs: List[str] = []
+    sys_prefixes = ("/usr/lib/", "/System/Library/", "/lib/")
+
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or s.endswith(":"):
+            continue
+        path = s.split()[0]
+        if not path.startswith("/"):
+            continue
+        if path.startswith(sys_prefixes):
+            system_libs.append(path)
+        else:
+            third_party_libs.append(path)
+
+    return third_party_libs, system_libs
+
+
+def classify_linked_libraries(binary_path: str) -> Tuple[List[str], List[str]]:
+    """
+    Split linked shared libraries into third-party vs system paths.
+    ELF uses ldd-style parsing; Mach-O uses otool -L. PE returns empty lists.
+    """
+    kind = binary_kind(binary_path)
+    if kind == "pe":
+        return [], []
+
+    text = shared_object_dependency_text(binary_path)
+    if not text.strip():
+        return [], []
+
+    if kind == "macho" or kernel_name() == "darwin":
+        return _parse_otool_l_lines(text)
+
+    return _parse_ldd_lines(text)

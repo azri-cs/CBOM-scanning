@@ -8,6 +8,8 @@ import re
 import psutil
 
 from scanner_platform import (
+    binary_kind,
+    classify_linked_libraries,
     iter_running_executable_paths,
     nm_symbols_text,
     shared_object_dependency_text,
@@ -335,43 +337,25 @@ def classify_algorithm_usage(hit):
 def classify_libraries(binary_path):
     if not os.path.exists(binary_path):
         print(f"Error: File '{binary_path}' not found.")
-        return
+        return [], []
 
-    try:
-        # Run ldd and capture output
-        result = subprocess.check_output(['ldd', binary_path], stderr=subprocess.STDOUT).decode()
-    except subprocess.CalledProcessError:
-        print(f"Error: Could not run ldd on {binary_path}. Is it a valid binary?")
-        return
+    kind = binary_kind(binary_path)
+    if kind == "unknown":
+        print(
+            f"Skipping: {binary_path} is not a recognized native binary "
+            "(script, data, or unsupported format)."
+        )
+        return [], []
+    if kind == "pe":
+        return [], []
 
-    system_libs = []
-    third_party_libs = []
-
-    # Standard system paths
-    system_paths = ['/lib', '/usr/lib', '/lib64']
-
-    for line in result.splitlines():
-        if "=>" in line:
-            parts = line.split("=>")
-            lib_name = parts[0].strip()
-            lib_path = parts[1].split('(')[0].strip()
-
-            if not lib_path or lib_path == "not found":
-                continue
-
-            # Check if the path starts with a standard system directory
-            is_system = any(lib_path.startswith(p) for p in system_paths)
-            
-            # Exclude /usr/local/lib as it is usually for third-party
-            if lib_path.startswith('/usr/local/lib'):
-                is_system = False
-
-            if is_system:
-                system_libs.append(lib_path)
-            else:
-                third_party_libs.append(lib_path)
-
-    return third_party_libs,system_libs
+    third_party, system = classify_linked_libraries(binary_path)
+    if not third_party and not system:
+        print(
+            f"Note: no shared-library lines parsed for {binary_path} "
+            f"({kind}); static binary, wrong architecture, or missing tools."
+        )
+    return third_party, system
 
 
 # ===================================================================
