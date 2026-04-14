@@ -2,21 +2,23 @@
 
 import os
 import platform
-import subprocess
 import csv
 import re
 
 from scanner_env import get_os_fingerprint, get_scanner_limits
-from scanner_platform import shared_object_dependency_text
+from scanner_platform import shared_object_dependency_text, strings_text
+from scanner_progress import maybe_report_progress
 
 # ==========================================================
 # OS DETECTION
 # ==========================================================
 
+
 def detect_os():
     if os.name == "nt" or platform.system().lower().startswith("win"):
         return "windows"
     return "unix"
+
 
 OS_TYPE = detect_os()
 
@@ -25,98 +27,54 @@ OS_TYPE = detect_os()
 # ==========================================================
 
 CRYPTO_RULES = {
-
     "AES": {
         "primitive": "block-cipher",
         "modes": ["ECB", "CBC", "CTR", "GCM", "CCM", "XTS"],
         "key_lengths": [128, 192, 256],
-        "cyclonedx_family": "AES"
+        "cyclonedx_family": "AES",
     },
-
-    "CHACHA20": {
-        "primitive": "stream-cipher",
-        "cyclonedx_family": "ChaCha20"
-    },
-
-    "AES-GCM": {
-        "primitive": "aead",
-        "cyclonedx_family": "AES-GCM"
-    },
-
-    "CHACHA20-POLY1305": {
-        "primitive": "aead",
-        "cyclonedx_family": "ChaCha20-Poly1305"
-    },
-
-    "SHA-1": {
-        "primitive": "hash",
-        "cyclonedx_family": "SHA-1"
-    },
-
-    "SHA-256": {
-        "primitive": "hash",
-        "cyclonedx_family": "SHA-256"
-    },
-
-    "SHA-384": {
-        "primitive": "hash",
-        "cyclonedx_family": "SHA-384"
-    },
-
-    "SHA-512": {
-        "primitive": "hash",
-        "cyclonedx_family": "SHA-512"
-    },
-
-    "MD5": {
-        "primitive": "hash",
-        "cyclonedx_family": "MD5",
-        "deprecated": True
-    },
-
+    "CHACHA20": {"primitive": "stream-cipher", "cyclonedx_family": "ChaCha20"},
+    "AES-GCM": {"primitive": "aead", "cyclonedx_family": "AES-GCM"},
+    "CHACHA20-POLY1305": {"primitive": "aead", "cyclonedx_family": "ChaCha20-Poly1305"},
+    "SHA-1": {"primitive": "hash", "cyclonedx_family": "SHA-1"},
+    "SHA-256": {"primitive": "hash", "cyclonedx_family": "SHA-256"},
+    "SHA-384": {"primitive": "hash", "cyclonedx_family": "SHA-384"},
+    "SHA-512": {"primitive": "hash", "cyclonedx_family": "SHA-512"},
+    "MD5": {"primitive": "hash", "cyclonedx_family": "MD5", "deprecated": True},
     "RSA": {
         "primitive": "public-key",
         "key_lengths": [1024, 2048, 3072, 4096],
         "padding": ["PKCS1v1.5", "PSS"],
-        "cyclonedx_family": "RSA"
+        "cyclonedx_family": "RSA",
     },
-
     "ECDSA": {
         "primitive": "digital-signature",
         "curves": ["P-256", "P-384", "P-521", "secp256k1"],
         "hashes": ["SHA-256", "SHA-384", "SHA-512"],
-        "cyclonedx_family": "ECDSA"
+        "cyclonedx_family": "ECDSA",
     },
-
     "ECDH": {
         "primitive": "key-agreement",
         "curves": ["P-256", "P-384", "X25519", "X448"],
-        "cyclonedx_family": "ECDH"
+        "cyclonedx_family": "ECDH",
     },
-
-    "ED25519": {
-        "primitive": "digital-signature",
-        "cyclonedx_family": "Ed25519"
-    },
-
+    "ED25519": {"primitive": "digital-signature", "cyclonedx_family": "Ed25519"},
     "HMAC": {
         "primitive": "mac",
         "hashes": ["SHA-256", "SHA-384", "SHA-512"],
-        "cyclonedx_family": "HMAC"
+        "cyclonedx_family": "HMAC",
     },
-
     "TLS": {
         "primitive": "protocol",
         "versions": ["1.0", "1.1", "1.2", "1.3"],
-        "cyclonedx_family": "TLS"
+        "cyclonedx_family": "TLS",
     },
-
     "SSL": {
         "primitive": "protocol",
         "versions": ["2.0", "3.0"],
         "deprecated": True,
-        "cyclonedx_family": "SSL"
-    }
+        "cyclonedx_family": "SSL",
+    },
 }
 
 CRYPTO_LIB_PATTERNS = [
@@ -127,12 +85,13 @@ CRYPTO_LIB_PATTERNS = [
     "boringssl",
     "libgcrypt",
     "libsodium",
-    "nettle"
+    "nettle",
 ]
 
 # ==========================================================
 # LIBRARY SEARCH PATHS (OS-SPECIFIC)
 # ==========================================================
+
 
 def _unix_library_search_dirs():
     """Debian/Ubuntu multiarch, musl, plus optional dirs from CBOM_EXTRA_LIB_DIRS."""
@@ -197,27 +156,12 @@ else:
     LIB_DIRS = _windows_library_search_dirs()
     LIB_EXTS = (".dll", ".lib")
 
-# ==========================================================
-# HELPERS
-# ==========================================================
-
-def run_cmd(cmd):
-    try:
-        if OS_TYPE == "windows":
-            return subprocess.check_output(
-                cmd, stderr=subprocess.DEVNULL, shell=True
-            ).decode(errors="ignore")
-        else:
-            return subprocess.check_output(
-                cmd, stderr=subprocess.DEVNULL
-            ).decode(errors="ignore")
-    except Exception:
-        return ""
 
 def is_library(path):
     if OS_TYPE == "windows":
         return path.lower().endswith(LIB_EXTS)
     return path.endswith(LIB_EXTS) or ".so." in path
+
 
 def find_libraries():
     libs = set()
@@ -230,9 +174,11 @@ def find_libraries():
                         libs.add(os.path.realpath(full))
     return sorted(libs)
 
+
 # ==========================================================
 # DEPENDENCY SCANNING
 # ==========================================================
+
 
 def get_crypto_deps(lib):
     libs = set()
@@ -240,8 +186,10 @@ def get_crypto_deps(lib):
     if OS_TYPE == "unix":
         pl = lib.lower()
         is_shared = (
-            pl.endswith(".so") or ".so." in pl
-            or pl.endswith(".dylib") or ".dylib." in pl
+            pl.endswith(".so")
+            or ".so." in pl
+            or pl.endswith(".dylib")
+            or ".dylib." in pl
         )
         if not is_shared:
             return "not-applicable"
@@ -255,16 +203,15 @@ def get_crypto_deps(lib):
 
     return ",".join(sorted(libs)) if libs else "none"
 
+
 # ==========================================================
 # CRYPTO DETECTION (STRINGS-BASED)
 # ==========================================================
 
+
 def detect_crypto(lib):
     results = []
-    strings_out = run_cmd(
-        ["strings", lib] if OS_TYPE == "unix"
-        else f'strings "{lib}"'
-    )
+    strings_out = strings_text(lib)
 
     for alg, meta in CRYPTO_RULES.items():
         if alg in strings_out:
@@ -277,30 +224,34 @@ def detect_crypto(lib):
 
     return results
 
+
 # ==========================================================
 # MAIN
 # ==========================================================
+
 
 def main():
     fp = get_os_fingerprint()
     limits = get_scanner_limits()
     with open("library.csv", "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "library",
-            "os_type",
-            "library_type",
-            "crypto_dependency",
-            "algorithm",
-            "primitive",
-            "key_size",
-            "detection_method",
-            "os_fingerprint",
-            "scanner_limits",
-        ])
+        writer.writerow(
+            [
+                "library",
+                "os_type",
+                "library_type",
+                "crypto_dependency",
+                "algorithm",
+                "primitive",
+                "key_size",
+                "detection_method",
+                "os_fingerprint",
+                "scanner_limits",
+            ]
+        )
 
-        for lib in find_libraries():
-            print(lib)
+        for processed, lib in enumerate(find_libraries(), start=1):
+            maybe_report_progress("libraries", processed)
             if lib.lower().endswith(".a"):
                 lib_type = "static"
             elif lib.lower().endswith(".la"):
@@ -314,34 +265,39 @@ def main():
             crypto_hits = detect_crypto(lib)
 
             if not crypto_hits:
-                writer.writerow([
-                    lib,
-                    OS_TYPE,
-                    lib_type,
-                    crypto_deps,
-                    "unknown",
-                    "unknown",
-                    "unknown",
-                    "dependency-only" if crypto_deps != "none" else "static-string",
-                    fp,
-                    limits,
-                ])
-            else:
-                for alg, primitive, key_size in crypto_hits:
-                    writer.writerow([
+                writer.writerow(
+                    [
                         lib,
                         OS_TYPE,
                         lib_type,
                         crypto_deps,
-                        alg,
-                        primitive,
-                        key_size,
-                        "dependency + strings",
+                        "unknown",
+                        "unknown",
+                        "unknown",
+                        "dependency-only" if crypto_deps != "none" else "static-string",
                         fp,
                         limits,
-                    ])
+                    ]
+                )
+            else:
+                for alg, primitive, key_size in crypto_hits:
+                    writer.writerow(
+                        [
+                            lib,
+                            OS_TYPE,
+                            lib_type,
+                            crypto_deps,
+                            alg,
+                            primitive,
+                            key_size,
+                            "dependency + strings",
+                            fp,
+                            limits,
+                        ]
+                    )
 
     print("[+] CSV generated: library_crypto_inventory.csv")
+
 
 if __name__ == "__main__":
     main()

@@ -9,9 +9,12 @@ Save raw XML, extract full certificate chain (PEM), save PEMs + JSON per target,
 Usage:
   python3 scanner_bit.py targets.txt --out-dir results --workers 6 --timeout 90
 """
+
 import subprocess, xmltodict, json, sys, pathlib, argparse, re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+
+from scanner_progress import maybe_report_progress
 
 # regex for PEM certs
 PEM_BLOCK_RE = re.compile(
@@ -20,7 +23,11 @@ PEM_BLOCK_RE = re.compile(
 )
 
 # regex to find client-ca-like blocks in raw xml (fallback)
-CLIENT_CA_RE = re.compile(r"<client[-_]?ca(?:s)?(?:[^>]*)>([\s\S]*?)</client[-_]?ca(?:s)?>", flags=re.IGNORECASE)
+CLIENT_CA_RE = re.compile(
+    r"<client[-_]?ca(?:s)?(?:[^>]*)>([\s\S]*?)</client[-_]?ca(?:s)?>",
+    flags=re.IGNORECASE,
+)
+
 
 def run_sslscan_xml(target: str, timeout: int = 90):
     """Run sslscan with deep flags and return output as string"""
@@ -38,8 +45,13 @@ def run_sslscan_xml(target: str, timeout: int = 90):
     except FileNotFoundError:
         return target, None, None, "sslscan binary not found"
     except subprocess.TimeoutExpired as e:
-        out = e.stdout.decode("utf-8", "ignore") if isinstance(e.stdout, bytes) else (e.stdout or "")
+        out = (
+            e.stdout.decode("utf-8", "ignore")
+            if isinstance(e.stdout, bytes)
+            else (e.stdout or "")
+        )
         return target, out, None, f"timeout after {timeout}s"
+
 
 def parse_sslscan_xml(xml_text: str):
     """Parse XML to dict safely"""
@@ -52,8 +64,10 @@ def parse_sslscan_xml(xml_text: str):
     except Exception as e:
         return {"_parse_error": str(e)}
 
+
 def normalize_target_filename(target: str):
     return target.replace(":", "_").replace("/", "_").replace(" ", "_")
+
 
 def find_pem_blocks_in_text(text):
     """Extract PEM blocks from string"""
@@ -63,9 +77,11 @@ def find_pem_blocks_in_text(text):
         return []
     return PEM_BLOCK_RE.findall(text)
 
+
 def find_certificate_nodes(parsed):
     """Walk parsed XML dict and collect certificate-related nodes"""
     found = []
+
     def walk(node):
         if isinstance(node, dict):
             for k, v in node.items():
@@ -75,8 +91,10 @@ def find_certificate_nodes(parsed):
         elif isinstance(node, list):
             for item in node:
                 walk(item)
+
     walk(parsed)
     return found
+
 
 def extract_pems_from_cert_node(node):
     """Extract PEMs from dict/list/string"""
@@ -100,6 +118,7 @@ def extract_pems_from_cert_node(node):
             out.append(pem)
     return out
 
+
 def extract_certificates_from_parsed(parsed_xml, raw_xml):
     """Combine parsed XML + raw text search"""
     pems = []
@@ -115,6 +134,7 @@ def extract_certificates_from_parsed(parsed_xml, raw_xml):
             out.append(pem)
     return out
 
+
 def save_pem_files(outdir: pathlib.Path, shortname: str, pem_list):
     """Save PEM certs as files"""
     saved = []
@@ -127,7 +147,9 @@ def save_pem_files(outdir: pathlib.Path, shortname: str, pem_list):
             saved.append({"error": str(e), "filename": str(pem_fn)})
     return saved
 
+
 # ------------------ NEW: Cipher & client CA extractors ------------------
+
 
 def extract_ciphers(parsed_xml):
     """
@@ -152,6 +174,7 @@ def extract_ciphers(parsed_xml):
         elif isinstance(node, list):
             for item in node:
                 walk(item)
+
     def parse_cipher_node(n):
         out = []
         if isinstance(n, dict):
@@ -173,19 +196,24 @@ def extract_ciphers(parsed_xml):
             # Build entries: if name is a list or dict handle accordingly
             if isinstance(name, list):
                 for nm in name:
-                    out.append({
+                    out.append(
+                        {
+                            "sslversion": attrs.get("sslversion")
+                            or attrs.get("version"),
+                            "status": attrs.get("status"),
+                            "strength": attrs.get("strength") or attrs.get("bits"),
+                            "cipherName": nm,
+                        }
+                    )
+            else:
+                out.append(
+                    {
                         "sslversion": attrs.get("sslversion") or attrs.get("version"),
                         "status": attrs.get("status"),
                         "strength": attrs.get("strength") or attrs.get("bits"),
-                        "cipherName": nm
-                    })
-            else:
-                out.append({
-                    "sslversion": attrs.get("sslversion") or attrs.get("version"),
-                    "status": attrs.get("status"),
-                    "strength": attrs.get("strength") or attrs.get("bits"),
-                    "cipherName": name
-                })
+                        "cipherName": name,
+                    }
+                )
         elif isinstance(n, str):
             out.append({"cipherName": n})
         return out
@@ -195,11 +223,17 @@ def extract_ciphers(parsed_xml):
     seen = set()
     out = []
     for c in ciphers:
-        key = (c.get("sslversion"), c.get("status"), c.get("cipherName"), c.get("strength"))
+        key = (
+            c.get("sslversion"),
+            c.get("status"),
+            c.get("cipherName"),
+            c.get("strength"),
+        )
         if key not in seen:
             seen.add(key)
             out.append(c)
     return out
+
 
 def extract_client_cas(parsed_xml, raw_xml):
     """
@@ -224,7 +258,7 @@ def extract_client_cas(parsed_xml, raw_xml):
                                 cas.append(json.dumps(it))
                     else:
                         # dict or complex: try to stringify relevant text children
-                        for subk, subv in (v.items() if isinstance(v, dict) else []):
+                        for subk, subv in v.items() if isinstance(v, dict) else []:
                             if isinstance(subv, str):
                                 cas.append(subv.strip())
                             else:
@@ -234,6 +268,7 @@ def extract_client_cas(parsed_xml, raw_xml):
         elif isinstance(node, list):
             for item in node:
                 walk(item)
+
     if parsed_xml:
         walk(parsed_xml)
 
@@ -256,7 +291,9 @@ def extract_client_cas(parsed_xml, raw_xml):
             out.append(s)
     return out
 
+
 # ------------------ End new extractors ------------------
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -277,7 +314,8 @@ def main():
 
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         futures = {ex.submit(run_sslscan_xml, t, args.timeout): t for t in targets}
-        for fut in as_completed(futures):
+        for processed, fut in enumerate(as_completed(futures), start=1):
+            maybe_report_progress("sslscan targets", processed)
             target, xml_out, rc, stderr = fut.result()
             short = normalize_target_filename(target)
             tdir = outdir / short
@@ -294,7 +332,7 @@ def main():
                 # new fields
                 "ciphers": [],
                 "client_cas": [],
-                "sslscan_xml_parsed": None,
+                "certificate_count": 0,
             }
 
             if xml_out:
@@ -309,7 +347,6 @@ def main():
 
                 # parse XML
                 parsed = parse_sslscan_xml(xml_out)
-                entry["sslscan_xml_parsed"] = parsed  # include full parsed XML
 
                 # extract ciphers
                 try:
@@ -327,32 +364,58 @@ def main():
                 pem_list = extract_certificates_from_parsed(parsed, xml_out)
                 if pem_list:
                     saved = save_pem_files(tdir, short, pem_list)
+                    entry["certificate_count"] = len(saved)
                     entry["certificates"] = [
-                        {"index": i+1, "pem_saved_as": saved[i], "pem": pem_list[i]}
+                        {"index": i + 1, "pem_saved_as": saved[i]}
                         for i in range(len(pem_list))
                     ]
                 else:
-                    entry["note"] = "No PEM certificates found (sslscan didn't include PEMs)"
+                    entry["note"] = (
+                        "No PEM certificates found (sslscan didn't include PEMs)"
+                    )
 
                 # write per-target JSON
                 try:
-                    json_path.write_text(json.dumps(entry, indent=2, ensure_ascii=False), encoding="utf-8")
+                    json_path.write_text(
+                        json.dumps(entry, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
                 except Exception as e:
                     entry["json_write_error"] = str(e)
             else:
                 entry["error"] = "No XML output"
                 try:
-                    json_path.write_text(json.dumps(entry, indent=2, ensure_ascii=False), encoding="utf-8")
+                    json_path.write_text(
+                        json.dumps(entry, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
                 except Exception:
                     pass
 
-            results[target] = entry
-            print(f"[{datetime.now().isoformat()}] Done {target} -> certs:{len(entry['certificates'])} ciphers:{len(entry['ciphers'])} client_cas:{len(entry['client_cas'])}")
+            results[target] = {
+                "target": entry["target"],
+                "scanned_at": entry["scanned_at"],
+                "sslscan_returncode": entry["sslscan_returncode"],
+                "sslscan_stderr": entry["sslscan_stderr"],
+                "raw_xml_saved": entry.get("raw_xml_saved"),
+                "certificate_count": entry.get("certificate_count", 0),
+                "certificates": entry.get("certificates", []),
+                "ciphers": entry.get("ciphers", []),
+                "client_cas": entry.get("client_cas", []),
+                "note": entry.get("note"),
+                "error": entry.get("error"),
+            }
+            print(
+                f"[{datetime.now().isoformat()}] Done {target} -> certs:{len(entry['certificates'])} ciphers:{len(entry['ciphers'])} client_cas:{len(entry['client_cas'])}"
+            )
 
     # combined JSON
     combined_path = outdir / "combined_results.json"
-    combined_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    combined_path.write_text(
+        json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     print(f"[{datetime.now().isoformat()}] All done, results in {outdir}")
+
 
 if __name__ == "__main__":
     main()

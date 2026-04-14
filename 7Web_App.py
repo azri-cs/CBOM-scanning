@@ -7,6 +7,7 @@ import platform
 from pathlib import Path
 
 from scanner_env import get_os_fingerprint, get_scanner_limits
+from scanner_progress import maybe_report_progress
 
 OUTPUT_CSV = "web_app.csv"
 
@@ -14,9 +15,16 @@ OUTPUT_CSV = "web_app.csv"
 # WEB SOURCE FILE TYPES
 # =====================================================
 WEB_EXTENSIONS = (
-    ".php", ".py", ".js", ".ts",
-    ".java", ".go", ".rb",
-    ".jsp", ".cs", ".scala"
+    ".php",
+    ".py",
+    ".js",
+    ".ts",
+    ".java",
+    ".go",
+    ".rb",
+    ".jsp",
+    ".cs",
+    ".scala",
 )
 
 # =====================================================
@@ -88,11 +96,23 @@ CRYPTO_RULES = {
     },
 }
 
+COMPILED_CRYPTO_RULES = {
+    algo: {
+        "primitive": meta["primitive"],
+        "compiled_patterns": [
+            re.compile(pattern, re.IGNORECASE) for pattern in meta["patterns"]
+        ],
+    }
+    for algo, meta in CRYPTO_RULES.items()
+}
+
+
 # =====================================================
 # OS DETECTION
 # =====================================================
 def detect_os():
     return platform.system().lower()
+
 
 def default_web_roots():
     raw = os.environ.get("CBOM_WEB_ROOTS", "").strip()
@@ -114,6 +134,7 @@ def default_web_roots():
         "/srv/www",
     ]
 
+
 # =====================================================
 # FILE SCANNING
 # =====================================================
@@ -125,9 +146,9 @@ def scan_file(path):
 
     findings = []
 
-    for algo, meta in CRYPTO_RULES.items():
-        for pattern in meta["patterns"]:
-            matches = re.findall(pattern, text, re.IGNORECASE)
+    for algo, meta in COMPILED_CRYPTO_RULES.items():
+        for pattern in meta["compiled_patterns"]:
+            matches = pattern.findall(text)
             for m in matches:
                 key_size = "unknown"
                 if isinstance(m, tuple):
@@ -137,14 +158,17 @@ def scan_file(path):
                 elif isinstance(m, str) and m.isdigit():
                     key_size = m
 
-                findings.append({
-                    "algorithm": algo,
-                    "primitive": meta["primitive"],
-                    "library": pattern,
-                    "key_size": key_size,
-                })
+                findings.append(
+                    {
+                        "algorithm": algo,
+                        "primitive": meta["primitive"],
+                        "library": pattern.pattern,
+                        "key_size": key_size,
+                    }
+                )
 
     return findings
+
 
 # =====================================================
 # MAIN
@@ -162,25 +186,29 @@ def main(roots=None):
 
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow([
-            "file_path",
-            "language",
-            "algorithm",
-            "primitive",
-            "library_or_api",
-            "key_size",
-            "detection_pattern",
-            "os_fingerprint",
-            "scanner_limits",
-        ])
+        writer.writerow(
+            [
+                "file_path",
+                "language",
+                "algorithm",
+                "primitive",
+                "library_or_api",
+                "key_size",
+                "detection_pattern",
+                "os_fingerprint",
+                "scanner_limits",
+            ]
+        )
 
         for root in roots:
             if not os.path.isdir(root):
                 continue
 
+            processed = 0
             for dirpath, _, filenames in os.walk(root):
                 for name in filenames:
-                    print(name)
+                    processed += 1
+                    maybe_report_progress(f"web files under {root}", processed)
                     if not name.lower().endswith(WEB_EXTENSIONS):
                         continue
 
@@ -193,20 +221,22 @@ def main(roots=None):
                     lang = Path(name).suffix.lstrip(".")
 
                     for f in findings:
-                        writer.writerow([
-                            path,
-                            lang,
-                            f["algorithm"],
-                            f["primitive"],
-                            f["library"],
-                            f["key_size"],
-                            f["library"],
-                            fp,
-                            limits,
-                        ])
+                        writer.writerow(
+                            [
+                                path,
+                                lang,
+                                f["algorithm"],
+                                f["primitive"],
+                                f["library"],
+                                f["key_size"],
+                                f["library"],
+                                fp,
+                                limits,
+                            ]
+                        )
 
     print(f"[+] Web crypto scan complete → {OUTPUT_CSV}")
 
+
 if __name__ == "__main__":
     main()
-
