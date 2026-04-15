@@ -7,6 +7,7 @@ import platform
 from datetime import timezone
 
 from scanner_env import get_os_fingerprint, get_scanner_limits
+from scanner_progress import maybe_report_progress
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.backends import default_backend
@@ -14,11 +15,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec, dsa, ed25519, ed4
 
 OUTPUT_CSV = "crypto_cert_key.csv"
 
-SCAN_EXTENSIONS = {
-    ".crt", ".cer", ".pem", ".der",
-    ".key", ".pk8",
-    ".p12", ".pfx"
-}
+SCAN_EXTENSIONS = {".crt", ".cer", ".pem", ".der", ".key", ".pk8", ".p12", ".pfx"}
+
 
 # =====================================================
 # OS DETECTION
@@ -26,11 +24,13 @@ SCAN_EXTENSIONS = {
 def detect_os():
     return platform.system().lower()
 
+
 def default_scan_root():
     os_type = detect_os()
     if os_type == "windows":
         return "C:\\"
     return "/"
+
 
 # =====================================================
 # HELPERS
@@ -38,8 +38,33 @@ def default_scan_root():
 def is_candidate(filename):
     return any(filename.lower().endswith(ext) for ext in SCAN_EXTENSIONS)
 
+
 def short_fingerprint(data):
     return hashlib.sha256(data).hexdigest()[:32]
+
+
+PEM_MARKERS = (
+    b"BEGIN CERTIFICATE",
+    b"BEGIN PRIVATE KEY",
+    b"BEGIN RSA PRIVATE KEY",
+)
+
+
+def has_pem_marker(path, chunk_size=65536):
+    tail = b""
+    try:
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    return False
+                window = tail + chunk
+                if any(marker in window for marker in PEM_MARKERS):
+                    return True
+                tail = window[-64:]
+    except Exception:
+        return False
+
 
 # =====================================================
 # CERTIFICATE ANALYSIS
@@ -90,6 +115,7 @@ def scan_certificate(data):
         "fingerprint_sha256": cert.fingerprint(hashes.SHA256()).hex(),
     }
 
+
 # =====================================================
 # PRIVATE KEY ANALYSIS
 # =====================================================
@@ -133,11 +159,15 @@ def scan_private_key(data):
         "fingerprint_sha256": hashlib.sha256(data).hexdigest(),
     }
 
+
 # =====================================================
 # FILE ANALYSIS
 # =====================================================
 def analyze_file(path):
     try:
+        if not has_pem_marker(path):
+            return None
+
         with open(path, "rb") as f:
             data = f.read()
 
@@ -151,6 +181,7 @@ def analyze_file(path):
         return None
 
     return None
+
 
 # =====================================================
 # MAIN
@@ -166,59 +197,66 @@ def main(scan_root=None):
 
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow([
-            "path",
-            "file_type",
-            "algorithm",
-            "key_size",
-            "curve",
-            "rsa_modulus_fingerprint",
-            "rsa_exponent",
-            "signature_algorithm",
-            "signature_hash",
-            "subject",
-            "issuer",
-            "serial",
-            "not_before",
-            "not_after",
-            "fingerprint_sha1",
-            "fingerprint_sha256",
-            "os_fingerprint",
-            "scanner_limits",
-        ])
+        writer.writerow(
+            [
+                "path",
+                "file_type",
+                "algorithm",
+                "key_size",
+                "curve",
+                "rsa_modulus_fingerprint",
+                "rsa_exponent",
+                "signature_algorithm",
+                "signature_hash",
+                "subject",
+                "issuer",
+                "serial",
+                "not_before",
+                "not_after",
+                "fingerprint_sha1",
+                "fingerprint_sha256",
+                "os_fingerprint",
+                "scanner_limits",
+            ]
+        )
 
+        processed = 0
         for dirpath, _, filenames in os.walk(scan_root):
             for name in filenames:
                 if not is_candidate(name):
                     continue
 
+                processed += 1
+                maybe_report_progress("certificate candidates", processed)
                 path = os.path.join(dirpath, name)
-                print(path)
                 result = analyze_file(path)
 
                 if result:
-                    writer.writerow([
-                        path,
-                        result["type"],
-                        result["algorithm"],
-                        result["key_size"],
-                        result["curve"],
-                        result["rsa_modulus_fp"],
-                        result["rsa_exponent"],
-                        result["signature_algorithm"],
-                        result["signature_hash"],
-                        result["subject"],
-                        result["issuer"],
-                        result["serial"],
-                        result["not_before"],
-                        result["not_after"],
-                        result["fingerprint_sha1"],
-                        result["fingerprint_sha256"],
-                        fp,
-                        limits,
-                    ])
+                    writer.writerow(
+                        [
+                            path,
+                            result["type"],
+                            result["algorithm"],
+                            result["key_size"],
+                            result["curve"],
+                            result["rsa_modulus_fp"],
+                            result["rsa_exponent"],
+                            result["signature_algorithm"],
+                            result["signature_hash"],
+                            result["subject"],
+                            result["issuer"],
+                            result["serial"],
+                            result["not_before"],
+                            result["not_after"],
+                            result["fingerprint_sha1"],
+                            result["fingerprint_sha256"],
+                            fp,
+                            limits,
+                        ]
+                    )
 
     print(f"[+] Scan complete → {OUTPUT_CSV}")
+
 
 if __name__ == "__main__":
     main()

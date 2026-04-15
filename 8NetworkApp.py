@@ -10,12 +10,14 @@ from datetime import datetime
 from deps import psutil
 
 from scanner_env import get_os_fingerprint, get_scanner_limits
+from scanner_progress import maybe_report_progress
 
 OUTPUT_CSV = "network_app.csv"
 
 INTERPRETERS = ("python", "php", "node", "perl", "ruby", "bash", "sh")
 
 OS_TYPE = platform.system().lower()
+
 
 # ======================================================
 # Protocol detection
@@ -27,6 +29,7 @@ def detect_protocol(port):
         500: "IPsec-IKE",
         4500: "IPsec-NAT-T",
     }.get(port, "UNKNOWN")
+
 
 # ======================================================
 # Identify application + script
@@ -49,6 +52,7 @@ def identify_application(proc):
 
     return proc.name(), exe, script
 
+
 # ======================================================
 # TLS probing
 # ======================================================
@@ -59,6 +63,7 @@ def parse_cipher(cipher):
     name, proto, bits = cipher
     return f"{name} ({bits} bits)"
 
+
 def probe_tls(host, port):
     try:
         ctx = ssl.create_default_context()
@@ -67,6 +72,7 @@ def probe_tls(host, port):
                 return f"{ssock.version()} | {parse_cipher(ssock.cipher())}"
     except Exception:
         return ""
+
 
 # ======================================================
 # IPsec detection (service-based)
@@ -91,19 +97,21 @@ def detect_ipsec_services():
 
     return ipsec_entries
 
+
 # ======================================================
 # MAIN
 # ======================================================
 def main():
     rows = []
     seen = set()
+    proc_cache = {}
     timestamp = datetime.utcnow().isoformat()
     fp = get_os_fingerprint()
     limits = get_scanner_limits()
 
     # ================= TLS & SSH CLIENT/SERVER =================
-    for conn in psutil.net_connections(kind="inet"):
-        print(conn)
+    for processed, conn in enumerate(psutil.net_connections(kind="inet"), start=1):
+        maybe_report_progress("network connections", processed)
         if not conn.pid:
             continue
 
@@ -117,72 +125,82 @@ def main():
         seen.add(key)
 
         try:
-            proc = psutil.Process(conn.pid)
-            pname, exe, script = identify_application(proc)
+            app_info = proc_cache.get(conn.pid)
+            if app_info is None:
+                app_info = identify_application(psutil.Process(conn.pid))
+                proc_cache[conn.pid] = app_info
+            pname, exe, script = app_info
 
             crypto = ""
             if proto == "TLS" and conn.raddr:
                 crypto = probe_tls(conn.raddr.ip, conn.raddr.port)
 
-            rows.append([
-                timestamp,
-                "CLIENT" if conn.raddr else "SERVER",
-                proto,
-                pname,
-                conn.pid,
-                exe,
-                script,
-                conn.raddr.ip if conn.raddr else "",
-                conn.raddr.port if conn.raddr else conn.laddr.port,
-                crypto,
-                fp,
-                limits,
-            ])
+            rows.append(
+                [
+                    timestamp,
+                    "CLIENT" if conn.raddr else "SERVER",
+                    proto,
+                    pname,
+                    conn.pid,
+                    exe,
+                    script,
+                    conn.raddr.ip if conn.raddr else "",
+                    conn.raddr.port if conn.raddr else conn.laddr.port,
+                    crypto,
+                    fp,
+                    limits,
+                ]
+            )
         except Exception:
             continue
 
     # ================= IPsec SERVICES =================
-    for proc in detect_ipsec_services():
-        print(proc)
+    for processed, proc in enumerate(detect_ipsec_services(), start=1):
+        maybe_report_progress("ipsec services", processed)
         pname, exe, _ = identify_application(proc)
 
-        rows.append([
-            timestamp,
-            "SERVICE",
-            "IPsec",
-            pname,
-            proc.pid,
-            exe,
-            "",
-            "",
-            "",
-            "IKE / ESP (kernel-managed)",
-            fp,
-            limits,
-        ])
+        rows.append(
+            [
+                timestamp,
+                "SERVICE",
+                "IPsec",
+                pname,
+                proc.pid,
+                exe,
+                "",
+                "",
+                "",
+                "IKE / ESP (kernel-managed)",
+                fp,
+                limits,
+            ]
+        )
 
     # ================= WRITE CSV =================
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "ScanTimeUTC",
-            "Role",
-            "Protocol",
-            "Process",
-            "PID",
-            "ExecutablePath",
-            "ScriptPath",
-            "RemoteIP",
-            "RemotePort",
-            "CryptoDetails",
-            "os_fingerprint",
-            "scanner_limits",
-        ])
+        writer.writerow(
+            [
+                "ScanTimeUTC",
+                "Role",
+                "Protocol",
+                "Process",
+                "PID",
+                "ExecutablePath",
+                "ScriptPath",
+                "RemoteIP",
+                "RemotePort",
+                "CryptoDetails",
+                "os_fingerprint",
+                "scanner_limits",
+            ]
+        )
         writer.writerows(rows)
 
     print(f"[+] Network crypto scan completed")
     print(f"[+] Entries written: {len(rows)}")
     print(f"[+] Output file: {OUTPUT_CSV}")
+
 
 # ======================================================
 if __name__ == "__main__":

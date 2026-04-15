@@ -11,6 +11,7 @@ import platform
 import shutil
 import subprocess
 from collections.abc import Iterator
+from functools import lru_cache
 from typing import List, Tuple
 
 from deps import psutil
@@ -59,6 +60,7 @@ def iter_running_executable_paths() -> Iterator[str]:
             continue
 
 
+@lru_cache(maxsize=4096)
 def shared_object_dependency_text(binary_path: str) -> str:
     """Dependency list text: dumpbin /imports, otool -L, or ldd."""
     if is_windows():
@@ -79,6 +81,7 @@ def shared_object_dependency_text(binary_path: str) -> str:
     return ""
 
 
+@lru_cache(maxsize=4096)
 def strings_text(binary_path: str) -> str:
     st = shutil.which("strings")
     if not st:
@@ -86,6 +89,7 @@ def strings_text(binary_path: str) -> str:
     return _run_capture([st, binary_path])
 
 
+@lru_cache(maxsize=4096)
 def nm_symbols_text(binary_path: str) -> str:
     if is_windows():
         db = shutil.which("dumpbin")
@@ -104,6 +108,7 @@ def nm_symbols_text(binary_path: str) -> str:
     return _run_capture([nm, "-D", binary_path])
 
 
+@lru_cache(maxsize=4096)
 def binary_kind(path: str) -> str:
     """Rough native format: elf, macho, pe, unknown."""
     try:
@@ -123,6 +128,25 @@ def binary_kind(path: str) -> str:
     if len(magic) >= 2 and magic[:2] == b"MZ":
         return "pe"
     return "unknown"
+
+
+def guess_language_from_strings(strings_output: str) -> str:
+    signatures = {
+        "Go": ["go.runtime", "runtime.gopanic"],
+        "Rust": ["rustc/", "rust_panic"],
+        "Python": ["py_runmain", "PyZipFile", "_PYI"],
+        "C++": ["GLIBCXX", "std::"],
+        "Java": ["JNI_CreateJavaVM", "java/lang/Object"],
+    }
+
+    if not strings_output:
+        return "C"
+
+    for lang, sigs in signatures.items():
+        if any(sig in strings_output for sig in sigs):
+            return lang
+
+    return "C"
 
 
 def _parse_ldd_lines(text: str) -> Tuple[List[str], List[str]]:
@@ -168,6 +192,7 @@ def _parse_otool_l_lines(text: str) -> Tuple[List[str], List[str]]:
     return third_party_libs, system_libs
 
 
+@lru_cache(maxsize=4096)
 def classify_linked_libraries(binary_path: str) -> Tuple[List[str], List[str]]:
     """
     Split linked shared libraries into third-party vs system paths.

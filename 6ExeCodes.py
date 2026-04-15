@@ -7,6 +7,7 @@ import platform
 from pathlib import Path
 
 from scanner_env import get_os_fingerprint, get_scanner_limits
+from scanner_progress import maybe_report_progress
 
 OUTPUT_CSV = "exec_script.csv"
 
@@ -51,17 +52,30 @@ CRYPTO_PATTERNS = {
     },
 }
 
+COMPILED_CRYPTO_PATTERNS = {
+    algo: {
+        "primitive": meta["primitive"],
+        "compiled_patterns": [
+            re.compile(pattern, re.IGNORECASE) for pattern in meta["patterns"]
+        ],
+    }
+    for algo, meta in CRYPTO_PATTERNS.items()
+}
+
+
 # =====================================================
 # OS DETECTION
 # =====================================================
 def detect_os():
     return platform.system().lower()
 
+
 def default_scan_root():
     os_type = detect_os()
     if os_type == "windows":
         return "C:\\"
     return "/"
+
 
 # =====================================================
 # SCRIPT DETECTION
@@ -84,6 +98,7 @@ def is_script(path):
 
     return path.lower().endswith(SCRIPT_EXT)
 
+
 # =====================================================
 # FILE SCANNING
 # =====================================================
@@ -95,9 +110,9 @@ def scan_file(path):
 
     findings = []
 
-    for algo, meta in CRYPTO_PATTERNS.items():
-        for pat in meta["patterns"]:
-            for m in re.findall(pat, text, re.IGNORECASE):
+    for algo, meta in COMPILED_CRYPTO_PATTERNS.items():
+        for pattern in meta["compiled_patterns"]:
+            for m in pattern.findall(text):
                 key_size = "unknown"
 
                 if isinstance(m, tuple):
@@ -107,14 +122,17 @@ def scan_file(path):
                 elif isinstance(m, str) and m.isdigit():
                     key_size = m
 
-                findings.append({
-                    "algorithm": algo,
-                    "primitive": meta["primitive"],
-                    "function": pat,
-                    "key_size": key_size,
-                })
+                findings.append(
+                    {
+                        "algorithm": algo,
+                        "primitive": meta["primitive"],
+                        "function": pattern.pattern,
+                        "key_size": key_size,
+                    }
+                )
 
     return findings
+
 
 # =====================================================
 # MAIN
@@ -130,20 +148,24 @@ def main(scan_root=None):
 
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow([
-            "script_path",
-            "language",
-            "algorithm",
-            "primitive",
-            "function_pattern",
-            "key_size",
-            "os_fingerprint",
-            "scanner_limits",
-        ])
+        writer.writerow(
+            [
+                "script_path",
+                "language",
+                "algorithm",
+                "primitive",
+                "function_pattern",
+                "key_size",
+                "os_fingerprint",
+                "scanner_limits",
+            ]
+        )
 
+        processed = 0
         for dirpath, _, filenames in os.walk(scan_root):
             for name in filenames:
-                print(name)
+                processed += 1
+                maybe_report_progress("script files", processed)
                 if not name.lower().endswith(SCRIPT_EXT):
                     continue
 
@@ -156,18 +178,21 @@ def main(scan_root=None):
                 findings = scan_file(path)
 
                 for f in findings:
-                    writer.writerow([
-                        path,
-                        lang,
-                        f["algorithm"],
-                        f["primitive"],
-                        f["function"],
-                        f["key_size"],
-                        fp,
-                        limits,
-                    ])
+                    writer.writerow(
+                        [
+                            path,
+                            lang,
+                            f["algorithm"],
+                            f["primitive"],
+                            f["function"],
+                            f["key_size"],
+                            fp,
+                            limits,
+                        ]
+                    )
 
     print(f"[+] Scan complete → {OUTPUT_CSV}")
+
 
 if __name__ == "__main__":
     main()
