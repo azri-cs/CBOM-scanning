@@ -4,7 +4,7 @@ import os
 import csv
 import hashlib
 import platform
-from datetime import timezone
+import warnings
 
 from scanner_env import get_os_fingerprint, get_scanner_limits
 from scanner_progress import maybe_report_progress
@@ -12,6 +12,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, dsa, ed25519, ed448
+from cryptography.utils import CryptographyDeprecationWarning
 
 OUTPUT_CSV = "crypto_cert_key.csv"
 
@@ -70,7 +71,17 @@ def has_pem_marker(path, chunk_size=65536):
 # CERTIFICATE ANALYSIS
 # =====================================================
 def scan_certificate(data):
-    cert = x509.load_pem_x509_certificate(data, default_backend())
+    # Suppress warnings about non-positive serial numbers (RFC 5280
+    # violation) — common in real-world certs we must still inventory.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=".*serial number.*",
+            category=CryptographyDeprecationWarning,
+        )
+        cert = x509.load_pem_x509_certificate(data, default_backend())
+        serial = hex(cert.serial_number)
+
     pubkey = cert.public_key()
 
     algo = pubkey.__class__.__name__
@@ -108,9 +119,9 @@ def scan_certificate(data):
         "signature_hash": sig_hash,
         "subject": cert.subject.rfc4514_string(),
         "issuer": cert.issuer.rfc4514_string(),
-        "serial": hex(cert.serial_number),
-        "not_before": cert.not_valid_before.astimezone(timezone.utc).isoformat(),
-        "not_after": cert.not_valid_after.astimezone(timezone.utc).isoformat(),
+        "serial": serial,
+        "not_before": cert.not_valid_before_utc.isoformat(),
+        "not_after": cert.not_valid_after_utc.isoformat(),
         "fingerprint_sha1": cert.fingerprint(hashes.SHA1()).hex(),
         "fingerprint_sha256": cert.fingerprint(hashes.SHA256()).hex(),
     }
